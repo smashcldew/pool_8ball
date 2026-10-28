@@ -1,0 +1,10 @@
+{
+  "name": "pool-8ball-online",
+  "version": "1.0.0",
+  "description": "純前端 8 號球線上對戰，邀請碼 WebRTC 點對點，可部署到 GitHub Pages",
+  "scripts": {
+    "test": "node test/engine.test.js",
+    "start": "python3 -m http.server 8000"
+  },
+  "license": "MIT"
+}
