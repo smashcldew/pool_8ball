@@ -31,7 +31,8 @@
   // ───────────────────────────────────────────────────────────────────
   let ICE_SERVERS = STUN.concat(TURN);
   let iceReady = false;
-  const CONNECT_TRIES = 4, OPEN_TIMEOUT = 7000, JOIN_TIMEOUT = 28000;
+  // OPEN_TIMEOUT 要夠寬，否則會在 ICE 快打通的前一刻就砍掉連線、無限重連 → 逾時。
+  const CONNECT_TRIES = 3, OPEN_TIMEOUT = 15000, JOIN_TIMEOUT = 50000;
 
   function pOpts(id) { return { config: { iceServers: ICE_SERVERS }, debug: 0 }; }
 
