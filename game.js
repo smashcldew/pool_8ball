@@ -18,17 +18,35 @@
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:global.stun.twilio.com:3478' }
   ];
-  // TURN 中繼伺服器：當雙方 NAT 太嚴格（校園／宿舍網路常見）無法直接打洞時，
-  // 改用中繼轉送，連線成功率接近 100%。下面是 Open Relay 的免費公共 TURN（盡力而為、
-  // 可能限流或失效）。要穩定請自行申請免費額度（metered.ca、Twilio 等）填在這裡。
-  const TURN = [
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-  ];
-  const ICE = STUN.concat(TURN);
-  const PEER_OPTS = { config: { iceServers: ICE }, debug: 0 };
+  // ── TURN 中繼（解決嚴格 NAT 連不上的關鍵）─────────────────────────────
+  // 當雙方（尤其校園／宿舍／手機熱點）NAT 太嚴格、無法直接打洞時，必須透過 TURN 中繼
+  // 轉送，成功率才會接近 100%。純 STUN 下會出現「某一方當房主就連不到」的不對稱失敗。
+  //
+  // 【建議】到 https://dashboard.metered.ca 免費註冊（約 50GB/月）→ 建立一個 App →
+  //        取得你的 subdomain 與 API key，填在下面，程式會自動取得中繼憑證：
+  const METERED = { subdomain: '', apiKey: '' };   // 例：{ subdomain: 'myapp', apiKey: 'abcd1234' }
+  //
+  // 或者你自架 / 用別家 TURN，直接把完整設定填進這個陣列：
+  const TURN = [];                                  // 例：{ urls:'turn:host:3478', username:'u', credential:'p' }
+  // ───────────────────────────────────────────────────────────────────
+  let ICE_SERVERS = STUN.concat(TURN);
+  let iceReady = false;
   const CONNECT_TRIES = 4, OPEN_TIMEOUT = 7000, JOIN_TIMEOUT = 28000;
+
+  function pOpts(id) { return { config: { iceServers: ICE_SERVERS }, debug: 0 }; }
+
+  // 第一次連線前，若有填 Metered 金鑰就去取得 TURN 憑證（只取一次；失敗則退回純 STUN）
+  function ensureIce() {
+    if (iceReady || !METERED.subdomain || !METERED.apiKey || typeof fetch === 'undefined') {
+      iceReady = true;
+      return Promise.resolve();
+    }
+    const url = 'https://' + METERED.subdomain + '.metered.live/api/v1/turn/credentials?apiKey=' + encodeURIComponent(METERED.apiKey);
+    return fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (arr) {
+      if (Array.isArray(arr) && arr.length) ICE_SERVERS = STUN.concat(TURN, arr);
+      iceReady = true;
+    }).catch(function () { iceReady = true; });
+  }
 
   const B = 40, CW = E.W + 2 * B, CH = E.H + 2 * B;     // 球桌外框
   const PULL_MAX = 260, MIN_PULL = 18, MIN_V = 120;     // 拉桿操作
@@ -105,7 +123,7 @@
     setMsg($('roomMsg'), '正在連線到配對伺服器…');
     show('room');
 
-    const p = new window.Peer(PEER_PREFIX + roomCode, PEER_OPTS);
+    const p = new window.Peer(PEER_PREFIX + roomCode, pOpts());
     peer = p;
     p.on('open', function () {
       if (peer !== p) return;
@@ -138,7 +156,7 @@
     }
     teardownNet();
     setMsg($('lobbyMsg'), '連線中…');
-    const p = new window.Peer(PEER_OPTS);
+    const p = new window.Peer(pOpts());
     peer = p;
     let tries = 0, openTimer = 0;
     const giveUp = setTimeout(function () {
@@ -600,8 +618,16 @@
     else window.prompt('複製這段文字：', text);
   }
 
-  $('btnCreate').addEventListener('click', function () { createRoom(0); });
-  $('joinForm').addEventListener('submit', function (e) { e.preventDefault(); joinRoom($('codeInput').value); });
+  $('btnCreate').addEventListener('click', function () {
+    setMsg($('lobbyMsg'), '準備連線…');
+    ensureIce().then(function () { createRoom(0); });
+  });
+  $('joinForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const code = $('codeInput').value;
+    setMsg($('lobbyMsg'), '準備連線…');
+    ensureIce().then(function () { joinRoom(code); });
+  });
   $('codeInput').addEventListener('input', function (e) { e.target.value = cleanCode(e.target.value); });
   $('btnLocal').addEventListener('click', function () {
     teardownNet();

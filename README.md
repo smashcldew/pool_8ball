@@ -55,7 +55,12 @@ python3 -m http.server 8000
 - 配對使用 **PeerJS 的公共雲端伺服器**只為了交換連線資訊，實際遊戲資料是兩位玩家**直接點對點**傳輸。
 - **連線為什麼有時會失敗？** WebRTC 要穿過雙方的 NAT／防火牆直接打洞，成功率取決於網路環境與當下時序，所以純 STUN 下會「時好時壞」，**校園／宿舍網路**尤其明顯。另外免費公共 PeerJS 配對伺服器偶爾也會塞車或房主 ID 傳播延遲。
 - 本專案已內建緩解：連不上時會**自動重試**（最多 4 次），房主端也會用最新的連線取代半開的死連線。
-- 要**穩定**（接近 100%）請設定 **TURN 中繼**：打洞失敗時改用中繼轉送。`game.js` 最上方已掛上 Open Relay 的免費公共 TURN（盡力而為、可能限流失效），正式使用建議自行申請免費額度（[metered.ca](https://www.metered.ca/tools/openrelay/)、Twilio 等）填入 `TURN` 陣列：
+- **某一方當房主就連不到？** 這是嚴格 NAT 的典型不對稱現象：嚴格 NAT 的一方當房主（被連接方）時特別難被連到。**解法是設定可用的 TURN 中繼。**（註：舊的免費公共 `openrelayproject` 靜態帳密已失效，所以純 STUN 現在等於沒有中繼。）
+- 要**穩定**（接近 100%），到 [dashboard.metered.ca](https://dashboard.metered.ca) 免費註冊（約 50GB／月）→ 建立一個 App → 取得 **subdomain** 與 **API key**，填進 `game.js` 最上方的 `METERED`，程式會自動取得中繼憑證：
+  ```js
+  const METERED = { subdomain: 'myapp', apiKey: 'abcd1234' };
+  ```
+  若自架或用別家 TURN，改填 `TURN` 陣列即可：
   ```js
   const TURN = [{ urls: 'turn:你的伺服器:3478', username: '...', credential: '...' }];
   ```
