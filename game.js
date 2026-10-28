@@ -591,9 +591,11 @@
   });
   $('btnBack').addEventListener('click', function () { backToLobby(''); });
   $('btnRematch').addEventListener('click', function () {
-    if (!session) return;
+    if (!session || session.state.winner === null) return;
     session.requestRematch();
-    if (session.role !== 'local' && !rematchSent) {
+    // requestRematch() 可能已經「雙方都同意→立刻開新局」，此時 onInit 已把按鈕復原，
+    // 不可再蓋成等待狀態。只有在仍停留在結算畫面（還沒開新局）時才顯示等待對手。
+    if (session.role !== 'local' && session.state.winner !== null) {
       rematchSent = true;
       $('btnRematch').disabled = true; $('btnRematch').textContent = '等待對手同意…';
     }
