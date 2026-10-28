@@ -23,8 +23,8 @@
   const RACK_X = 700, RDX = Math.sqrt(3) * R + 0.3, RDY = 2 * R + 0.2;
 
   const POCKETS = [
-    { x: 0, y: 0, r: 25 }, { x: W / 2, y: -4, r: 22 }, { x: W, y: 0, r: 25 },
-    { x: 0, y: H, r: 25 }, { x: W / 2, y: H + 4, r: 22 }, { x: W, y: H, r: 25 }
+    { x: 0, y: 0, r: 29 }, { x: W / 2, y: -4, r: 22 }, { x: W, y: 0, r: 29 },
+    { x: 0, y: H, r: 29 }, { x: W / 2, y: H + 4, r: 22 }, { x: W, y: H, r: 29 }
   ];
   // 袋口兩側的「庫角」，球碰到會彈開
   const JAWS = [
