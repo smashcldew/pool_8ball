@@ -108,6 +108,7 @@
       if (peer !== p) return;
       if (conn) { c.on('open', function () { c.close(); }); return; }  // 房間已滿
       conn = c;
+      setMsg($('roomMsg'), '對手連線中…');
       wireConn(c, 'host');
     });
     p.on('disconnected', function () { try { if (peer === p && !p.destroyed) p.reconnect(); } catch (e) { /* ignore */ } });
@@ -146,20 +147,36 @@
   }
 
   function wireConn(c, role, timer) {
-    c.on('open', function () {
-      if (conn !== c) return;
+    let opened = false;
+    function onOpen() {
+      if (opened || conn !== c) return;
+      opened = true;
       clearTimeout(timer);
       lastRecv = Date.now();
       session = new Session(E, role, function (m) { if (c.open) c.send(m); }, hooks);
       peerGone = false;
       pingT = setInterval(function () { if (c.open) c.send({ t: 'ping' }); }, 4000);
       watchT = setInterval(function () { if (Date.now() - lastRecv > 20000) onPeerGone(); }, 5000);
-      if (role === 'host') session.startGame(0);
-      else setMsg($('lobbyMsg'), '已連線，等待房主開始…');
-    });
+      if (role === 'host') {
+        session.startGame(0);
+      } else {
+        setMsg($('lobbyMsg'), '已連線，等待房主開始…');
+        if (c.open) c.send({ t: 'hello' });   // 主動要求房主送開局資料（保險）
+      }
+    }
+    // 重點修正：PeerJS 接收端（房主）常常在我們掛上 'open' 監聽器之前就已經 open，
+    // 導致事件被錯過、房主永遠不會開始。所以先檢查 c.open，已開就立即處理。
+    if (c.open) onOpen(); else c.on('open', onOpen);
+
     c.on('data', function (m) {
       if (conn !== c) return;
       lastRecv = Date.now();
+      if (m && m.t === 'hello') {
+        // 房主收到挑戰者的 hello：把目前的開局盤面再送一次，確保對方一定收到
+        if (session && session.role === 'host' && session.ready && c.open)
+          c.send({ t: 'sync', init: true, s: E.serialize(session.state) });
+        return;
+      }
       if (session) session.receive(m);
     });
     c.on('close', function () { if (conn === c) onPeerGone(); });
