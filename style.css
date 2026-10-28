@@ -69,7 +69,15 @@ button.icon { padding: 8px 12px; border-radius: 10px; line-height: 1; }
 
 /* 遊戲畫面 */
 #game { gap: 8px; }
-#hud { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#hud { width: 100%; display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
+#scoreboard {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 4px 12px;
+  font: 800 clamp(1.1rem, 4.5vw, 1.6rem)/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+#scoreboard .s { min-width: 1.1em; text-align: center; color: var(--accent); }
+#scoreboard .sep { color: var(--muted); }
+#scoreboard .s.lead { text-shadow: 0 0 10px rgba(242,197,0,.5); }
 .player {
   background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 6px 10px;
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; min-width: 0;
@@ -96,7 +104,7 @@ button.icon { padding: 8px 12px; border-radius: 10px; line-height: 1; }
 #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; padding: 20px; z-index: 10; }
 .dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 24px; width: min(360px, 100%); text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 .dialog h2 { margin: 0 0 6px; font-size: 1.6rem; }
-.dialog p { color: var(--muted); margin: 0 0 18px; }
+.dialog p { color: var(--muted); margin: 0 0 18px; white-space: pre-line; }
 
 @media (min-width: 720px) {
   #bar { grid-template-columns: 1fr 260px auto; }

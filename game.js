@@ -201,7 +201,7 @@
       if (m && m.t === 'hello') {
         // 房主收到挑戰者的 hello：把目前的開局盤面再送一次，確保對方一定收到
         if (session && session.role === 'host' && session.ready && c.open)
-          c.send({ t: 'sync', init: true, s: E.serialize(session.state) });
+          c.send(session._syncMsg(true));
         return;
       }
       if (session) session.receive(m);
@@ -285,6 +285,11 @@
   function refreshHUD() {
     if (!session) return;
     const s = session.state;
+    const sc = session.score || [0, 0];
+    $('s0').textContent = sc[0];
+    $('s1').textContent = sc[1];
+    $('s0').classList.toggle('lead', sc[0] > sc[1]);
+    $('s1').classList.toggle('lead', sc[1] > sc[0]);
     for (let p = 0; p < 2; p++) {
       const card = $('p' + p);
       card.classList.toggle('active', s.turn === p && s.winner === null);
@@ -320,8 +325,10 @@
     if (s.winner === null || peerGone) return;
     const w = s.winner;
     const title = session.my === null ? nameOf(w) + '獲勝' : (w === session.my ? '你贏了 🎉' : '你輸了');
-    let text = describe(s.message);
-    if (session.role === 'host' && session.rematch[1] && !session.rematch[0]) text += ' 對手想再來一局。';
+    const sc = session.score || [0, 0];
+    const scoreLine = '目前比數　' + nameOf(0) + ' ' + sc[0] + ' : ' + sc[1] + ' ' + nameOf(1);
+    let text = describe(s.message) + '\n' + scoreLine;
+    if (session.role === 'host' && session.rematch[1] && !session.rematch[0]) text += '　對手想再來一局。';
     showOverlay(title, text, true);
   }
 
