@@ -18,10 +18,17 @@
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:global.stun.twilio.com:3478' }
   ];
-  // 若雙方在嚴格的 NAT / 校園網路下連不上，需要 TURN 中繼伺服器，填在這裡：
-  // { urls: 'turn:your.turn.server:3478', username: '...', credential: '...' }
-  const TURN = [];
+  // TURN 中繼伺服器：當雙方 NAT 太嚴格（校園／宿舍網路常見）無法直接打洞時，
+  // 改用中繼轉送，連線成功率接近 100%。下面是 Open Relay 的免費公共 TURN（盡力而為、
+  // 可能限流或失效）。要穩定請自行申請免費額度（metered.ca、Twilio 等）填在這裡。
+  const TURN = [
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+  ];
   const ICE = STUN.concat(TURN);
+  const PEER_OPTS = { config: { iceServers: ICE }, debug: 0 };
+  const CONNECT_TRIES = 4, OPEN_TIMEOUT = 7000, JOIN_TIMEOUT = 28000;
 
   const B = 40, CW = E.W + 2 * B, CH = E.H + 2 * B;     // 球桌外框
   const PULL_MAX = 260, MIN_PULL = 18, MIN_V = 120;     // 拉桿操作
@@ -98,7 +105,7 @@
     setMsg($('roomMsg'), '正在連線到配對伺服器…');
     show('room');
 
-    const p = new window.Peer(PEER_PREFIX + roomCode, { config: { iceServers: ICE } });
+    const p = new window.Peer(PEER_PREFIX + roomCode, PEER_OPTS);
     peer = p;
     p.on('open', function () {
       if (peer !== p) return;
@@ -106,7 +113,10 @@
     });
     p.on('connection', function (c) {
       if (peer !== p) return;
-      if (conn) { c.on('open', function () { c.close(); }); return; }  // 房間已滿
+      // 遊戲已經開始才拒絕新連線；開始前若對手重試（換一條新連線），用最新的取代尚未
+      // 開啟的舊連線——否則房主會鎖在一條半開、對方已放棄的死連線上，造成「機率性失敗」。
+      if (session) { c.on('open', function () { try { c.close(); } catch (e) { /* ignore */ } }); return; }
+      if (conn && conn !== c) { try { conn.close(); } catch (e) { /* ignore */ } }
       conn = c;
       setMsg($('roomMsg'), '對手連線中…');
       wireConn(c, 'host');
@@ -128,21 +138,38 @@
     }
     teardownNet();
     setMsg($('lobbyMsg'), '連線中…');
-    const p = new window.Peer({ config: { iceServers: ICE } });
+    const p = new window.Peer(PEER_OPTS);
     peer = p;
-    const timer = setTimeout(function () {
-      if (peer === p && !session) backToLobby('連線逾時：請確認邀請碼、房主是否還開著頁面，或雙方網路是否允許 P2P。', true);
-    }, 20000);
-    p.on('open', function () {
-      if (peer !== p) return;
+    let tries = 0, openTimer = 0;
+    const giveUp = setTimeout(function () {
+      if (peer === p && !session) { clearTimeout(openTimer); backToLobby('連線逾時：請確認邀請碼、房主是否還開著頁面，或雙方網路是否允許 P2P（嚴格網路可能需要 TURN）。', true); }
+    }, JOIN_TIMEOUT);
+
+    // 偶發失敗（broker 傳播延遲、ICE 打洞沒打中）重試常能成功，所以在開啟逾時後換一條新連線重試。
+    function attempt() {
+      if (peer !== p || session) return;
+      tries++;
+      setMsg($('lobbyMsg'), tries === 1 ? '連線中…' : '連線中…（重試 ' + tries + '/' + CONNECT_TRIES + '）');
       const c = p.connect(PEER_PREFIX + code, { reliable: true });
       conn = c;
-      wireConn(c, 'guest', timer);
-    });
+      wireConn(c, 'guest', giveUp);
+      clearTimeout(openTimer);
+      openTimer = setTimeout(function () {
+        if (peer !== p || session || c.open) return;        // 已成功則不動
+        try { c.close(); } catch (e) { /* ignore */ }
+        if (conn === c) conn = null;
+        if (tries < CONNECT_TRIES) attempt(); else backToLobby('連不上房主：可能雙方網路不允許 P2P，嚴格網路（校園／宿舍）通常需要 TURN 中繼。', true);
+      }, OPEN_TIMEOUT);
+    }
+
+    p.on('open', function () { if (peer === p) attempt(); });
     p.on('error', function (err) {
-      clearTimeout(timer);
-      if (peer !== p) return;
-      backToLobby(err.type === 'peer-unavailable' ? '找不到這個房間，請確認邀請碼。' : netErr(err), true);
+      if (peer !== p || session) return;
+      // 房主 ID 可能還沒在 broker 上傳播完 → 短暫重試，而不是直接報「找不到房間」
+      if (err.type === 'peer-unavailable' && tries < CONNECT_TRIES) { setTimeout(attempt, 900); return; }
+      if (err.type === 'peer-unavailable') return;           // 交給 giveUp 逾時統一處理
+      clearTimeout(giveUp); clearTimeout(openTimer);
+      backToLobby(netErr(err), true);
     });
   }
 
